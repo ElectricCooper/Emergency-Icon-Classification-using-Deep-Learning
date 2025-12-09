@@ -3,6 +3,12 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+#Project structure folder
+data/NicIcon/
+.data/NicIcon
+data/gathered/
+.data/gathered
+
 # C extensions
 *.so
 
