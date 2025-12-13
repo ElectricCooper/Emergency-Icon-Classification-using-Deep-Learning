@@ -8,6 +8,8 @@ data/NicIcon/
 .data/NicIcon
 data/gathered/
 .data/gathered
+data/extracted
+.data/extracted
 
 # C extensions
 *.so
