@@ -13,14 +13,14 @@ def process_square(
 ) -> np.ndarray:
     """
     Detect the drawing within a cropped square, zoom to its bounding box,
-    and return a grayscale image resized to the original dimensions.
+    and return a binary image resized to the original dimensions.
 
     Args:
         cropped_square: Input image.
         padding: Padding (in pixels) added around the detected icon.
 
     Returns:
-        Grayscale image, zoomed on the icon, with original dimensions.
+        Binary image, zoomed on the icon, with original dimensions.
     """
     height, width = cropped_square.shape[:2]
 
@@ -36,9 +36,6 @@ def process_square(
         binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
     )
 
-    if not contours:
-        return gray
-
     # Bounding box over contours
     points = np.vstack(contours)
     x, y, w, h = cv2.boundingRect(points)
@@ -49,8 +46,8 @@ def process_square(
     w = min(width - x, w + 2 * padding)
     h = min(height - y, h + 2 * padding)
 
-    # Crop and resize gray image
-    icon = gray[y:y + h, x:x + w]
+    # Crop and resize binary image
+    icon = binary[y:y + h, x:x + w]
     icon_resized = cv2.resize(
                     icon,
                     (width, height),
