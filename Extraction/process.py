@@ -51,7 +51,15 @@ def process_square(
     icon_resized = cv2.resize(
                     icon,
                     (width, height),
-                    interpolation=cv2.INTER_CUBIC
+                    interpolation=cv2.INTER_NEAREST
                 )
 
-    return icon_resized
+    # Morphological opening to clean noise
+    # might remove depending on behavior with dataset
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    clean_icon = cv2.morphologyEx(icon_resized, cv2.MORPH_OPEN, kernel)
+    # if too much is removed, return previous image
+    if cv2.countNonZero(clean_icon) < 0.8 * cv2.countNonZero(icon_resized):
+        return icon_resized
+
+    return clean_icon
