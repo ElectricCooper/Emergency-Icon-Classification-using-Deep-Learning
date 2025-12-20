@@ -11,9 +11,6 @@ class MomentsFeatures:
     @staticmethod
     def get_hu_moments(image):
         """Calculate Hu moments"""
-
-        # Gaussian blur to reduce noise
-        image = cv2.GaussianBlur(image, (5, 5), 0)
         # Calculate moments
         moments = cv2.moments(image, True)
         hu_moments = cv2.HuMoments(moments).flatten()
@@ -26,10 +23,6 @@ class MomentsFeatures:
     @staticmethod
     def gravity_center(image):
         """Calculate center of gravity"""
-
-        # Gaussian blur to reduce noise
-        image = cv2.GaussianBlur(image, (5, 5), 0)
-
         moments = cv2.moments(image, True)
 
         if moments['m00'] == 0:
