@@ -1,6 +1,9 @@
+"""Module for setting up different models from torchvision"""
+
 import torch.nn as nn
 from torchvision import models
 from torchvision.models import ResNet50_Weights, ViT_B_16_Weights
+
 
 def get_model(model_name, num_classes, device):
     """
@@ -24,5 +27,5 @@ def get_model(model_name, num_classes, device):
     else:
         print("Error. Wrong model name")
         return None
-    
+
     return model.to(device)

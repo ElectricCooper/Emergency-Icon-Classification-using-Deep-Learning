@@ -9,6 +9,7 @@ from pathlib import Path
 import cv2
 from extract_squares import SquareDetector
 from label import labelling
+from process import process_square
 
 
 def extract_terminology(filename: str) -> str:
@@ -108,13 +109,14 @@ def main():
             for rect in rectangles:
                 x, y, w, h = rect
                 cropped_square = img[y:y+h, x:x+w]
+                processed_square = process_square(cropped_square)
 
                 # Generate filename with counter
                 counter = label_counters[label]
                 image_filename = f"{label}_{counter:05d}.png"
                 image_path = label_folder / image_filename
 
-                cv2.imwrite(str(image_path), cropped_square)
+                cv2.imwrite(str(image_path), processed_square)
 
                 label_counters[label] += 1
                 squares_extracted += 1
