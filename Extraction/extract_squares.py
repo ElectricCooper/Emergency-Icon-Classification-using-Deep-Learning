@@ -11,42 +11,46 @@ import numpy as np
 class SquareDetector:
     """Class for detecting and processing squares in images."""
 
-    THRESH = 50  # For edge detection
+    THRESH = 10  # For edge detection
+    AREA_THRESHOLD = 2000  # Minimum area to consider
+    EXPECTED_COLS = 5
+    EXPECTED_ROWS = 7
+    EXPECTED_TOTAL = 35  # Expected number of icon squares
 
     @staticmethod
-    def angle(
-        pt1: Tuple[int, int],
-        pt2: Tuple[int, int],
-        pt0: Tuple[int, int]
-    ) -> float:
+    def filter_by_aspect_ratio(
+        squares: List[np.ndarray],
+        max_ratio: float = 2.0
+    ) -> List[np.ndarray]:
         """
-        Calculate cosine of angle between vectors from pt0->pt1 and pt0->pt2.
+        Filter out rectangles that are too long compared to their width.
 
         Args:
-            pt1: The first point
-            pt2: The second point
-            pt0: The origin point
+            squares: Detected squares
+            max_ratio: Maximum allowed aspect ratio
 
         Returns:
-            The cosine of the angle
+            Filtered list of squares
         """
-        dx1 = pt1[0] - pt0[0]
-        dy1 = pt1[1] - pt0[1]
-        dx2 = pt2[0] - pt0[0]
-        dy2 = pt2[1] - pt0[1]
+        filtered = []
 
-        dx1 = float(dx1)
-        dy1 = float(dy1)
-        dx2 = float(dx2)
-        dy2 = float(dy2)
-        return (dx1 * dx2 + dy1 * dy2) / np.sqrt(
-            (dx1 * dx1 + dy1 * dy1) * (dx2 * dx2 + dy2 * dy2) + 1e-10
-        )
+        for sq in squares:
+            _, _, w, h = cv2.boundingRect(sq)
+            aspect_ratio = max(w, h) / min(w, h)
+            if aspect_ratio <= max_ratio:
+                filtered.append(sq)
+        return filtered
 
     @staticmethod
-    def find_squares(image: np.ndarray) -> List[np.ndarray]:
+    def find_squares(image: np.ndarray):
         """
-        Find squares in the given image.
+        Find large blobs in the given image.
+
+        As the forms mostly contain squares and rectangles,
+        most of detected blobs are squares.
+
+        We also filter the rectangles to give back only squares.
+        (Aspect ratio filterring can also filter some other abnormal blobs)
 
         Args:
             image: The input image
@@ -56,168 +60,135 @@ class SquareDetector:
         """
         squares = []
 
-        # Down-scale and up-scale the image to filter out noise
-        down1 = cv2.pyrDown(image)
-        down2 = cv2.pyrDown(down1)
-        up1 = cv2.pyrUp(down2, dstsize=(down1.shape[1], down1.shape[0]))
-        timg = cv2.pyrUp(up1, dstsize=(image.shape[1], image.shape[0]))
+        # Search for squares
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-        # Search for squares in every color plane
-        for c in range(3):
-            # Extract the channel
-            gray0 = timg[:, :, c]
+        # Apply Canny edge detection
+        gray = cv2.Canny(gray, 0, 0)
+        gray = cv2.dilate(gray, None)
 
-            # Apply Canny edge detection
-            gray = cv2.Canny(gray0, 0, SquareDetector.THRESH, apertureSize=3)
-            gray = cv2.dilate(gray, None)
+        # Find contours
+        contours, _ = cv2.findContours(
+            gray,
+            cv2.RETR_LIST,
+            cv2.CHAIN_APPROX_SIMPLE
+            )
 
-            # Find contours
-            contours, _ = cv2.findContours(
-                gray,
-                cv2.RETR_LIST,
-                cv2.CHAIN_APPROX_SIMPLE
-                )
+        # Testing each contour
+        for contour in contours:
 
-            # Test each contour
-            for contour in contours:
-                # Approximate the contour
-                approx = cv2.approxPolyDP(
-                    contour,
-                    cv2.arcLength(contour, True) * 0.02,
-                    True
-                    )
+            # Skip small areas (noise)
+            # Verification moved here to avoid processing small contours
+            area = abs(cv2.contourArea(contour))
+            if area < SquareDetector.AREA_THRESHOLD:
+                continue
 
-                # Check if it is a square
-                if (len(approx) == 4 and
-                        abs(cv2.contourArea(approx)) > 1000 and
-                        cv2.isContourConvex(approx)):
+            rect = cv2.minAreaRect(contour)
+            box = cv2.boxPoints(rect)
+            box = np.int32(box)
 
-                    max_cosine = 0
-                    for j in range(2, 5):
-                        cosine = abs(SquareDetector.angle(
-                            tuple(approx[j % 4][0]),
-                            tuple(approx[j - 2][0]),
-                            tuple(approx[j - 1][0])
-                        ))
-                        max_cosine = max(max_cosine, cosine)
+            squares.append(box)
 
-                    # Accept if all angles are ~90 degrees
-                    if max_cosine < 0.3:
-                        squares.append(approx)
-
+        # Filter rectangles out
+        squares = SquareDetector.filter_by_aspect_ratio(squares)
         return squares
 
     @staticmethod
-    def map_squares(
-        squares: List[np.ndarray],
-        threshold: int = 10
+    def row_map_by_area(
+        squares: List[np.ndarray]
     ) -> Dict[int, List[Tuple]]:
         """
-        Map detected squares into groups based on their Y-coordinate.
-
-        Args:
-            image: The input image
-            squares: The detected squares
-            threshold: Y-coordinate threshold for grouping
+        Select 35 squares by area similarity,
+        then group them into rows using Y-ordering,
 
         Returns:
-            A dict in the form (Y-coordinate,list of rectangles (x, y, w, h)
+            Dict[row_index]: list of rectangles for each row
         """
-        grouped_squares = {}
+        if len(squares) < SquareDetector.EXPECTED_TOTAL:
+            raise ValueError(
+                "Not enough squares: expected at least "
+                + f"{SquareDetector.EXPECTED_TOTAL}, got {len(squares)}"
+            )
 
-        # Group squares by Y coordinate
-        for square in squares:
-            x, y, w, h = cv2.boundingRect(square)
+        # Selecting 35 squares by area similarity
+        rects = [(sq, cv2.boundingRect(sq)) for sq in squares]
+        areas = np.array([w * h for _, (_, _, w, h) in rects])
 
-            added = False
-            for group_y in list(grouped_squares.keys()):
-                if abs(group_y - y) <= threshold:
-                    grouped_squares[group_y].append((x, y, w, h))
-                    added = True
-                    break
+        median_area = np.median(areas)
+        diffs = np.abs(areas - median_area)
 
-            if not added:
-                grouped_squares[y] = [(x, y, w, h)]
+        selected_idx = np.argsort(diffs)[:SquareDetector.EXPECTED_TOTAL]
+        selected_rects = [rects[i][1] for i in selected_idx]
 
-        for group_y in grouped_squares:
-            grouped_squares[group_y] = sorted(
-                                        grouped_squares[group_y],
-                                        key=lambda r: r[0]
-                                        )
+        # Sort by y center (top to bottom)
+        selected_rects.sort(key=lambda r: r[1] + r[3] / 2)
 
-        return grouped_squares
+        # Make rows
+        grid: Dict[int, List[Tuple]] = {}
+
+        for row_idx in range(SquareDetector.EXPECTED_ROWS):
+            start = row_idx * SquareDetector.EXPECTED_COLS
+            end = start + SquareDetector.EXPECTED_COLS
+
+            row = selected_rects[start:end]
+
+            if len(row) != SquareDetector.EXPECTED_COLS:
+                raise RuntimeError(
+                    f"Row {row_idx} has {len(row)} squares" +
+                    f"instead of {SquareDetector.EXPECTED_COLS}"
+                )
+
+            grid[row_idx] = row
+
+        return grid
 
     @staticmethod
-    def filter_squares(
-        squares: List[np.ndarray],
-        area_min: int,
-        area_max: int,
-        tolerance: int = 20
+    def remove_duplicates(
+            squares: List[np.ndarray],
+            tolerance: int = 20
     ) -> List[np.ndarray]:
         """
-        Filter out overlapping or similar squares based on area and tolerance.
+        Remove overlapping or nearly identical squares.
 
         Args:
-            squares: The detected squares
-            area_min: Minimum area size
-            area_max: Maximum area size
-            tolerance: Tolerance for determining similar squares
+            squares: List of detected squares
+            tolerance: Distance tolerance for considering squares as duplicates
 
         Returns:
-            Filtered list of squares
+            List of squares without duplicates
         """
-        filtered_squares = []
         keep = [True] * len(squares)
 
-        # Remove duplicate / similar squares
         for i, sq1 in enumerate(squares):
             if not keep[i]:
                 continue
 
             x1, y1, w1, h1 = cv2.boundingRect(sq1)
-            rect1_br_x = x1 + w1
-            rect1_br_y = y1 + h1
+            area1 = w1 * h1
 
-            for j, sq2 in enumerate(squares[i + 1:], start=i + 1):
+            for j in range(i + 1, len(squares)):
                 if not keep[j]:
                     continue
 
-                x2, y2, w2, h2 = cv2.boundingRect(sq2)
-                rect2_br_x = x2 + w2
-                rect2_br_y = y2 + h2
+                x2, y2, w2, h2 = cv2.boundingRect(squares[j])
+                area2 = w2 * h2
 
+                # Check if squares are similar in position
                 is_similar = (
                     abs(x1 - x2) < tolerance and
                     abs(y1 - y2) < tolerance and
-                    abs(rect1_br_x - rect2_br_x) < tolerance and
-                    abs(rect1_br_y - rect2_br_y) < tolerance
+                    abs((x1 + w1) - (x2 + w2)) < tolerance and
+                    abs((y1 + h1) - (y2 + h2)) < tolerance
                 )
 
                 if is_similar:
-                    area1 = w1 * h1
-                    area2 = w2 * h2
-
-                    if area1 < area2:
+                    # Keep the bigger one
+                    # (if icon square is inside, treated in process.py)
+                    if area1 > area2:
                         keep[j] = False
                     else:
                         keep[i] = False
-                        break   # stop comparing
+                        break
 
-        # Filter by area
-        for i, sq in enumerate(squares):
-            if not keep[i]:
-                continue
-
-            _, _, w, h = cv2.boundingRect(sq)
-            area = w * h
-
-            longer_side = max(w, h)
-            shorter_side = min(w, h)
-
-            if longer_side > 2 * shorter_side:  # reject non-square rectangles
-                continue
-
-            if area_min < area < area_max:
-                filtered_squares.append(sq)
-
-        return filtered_squares
+        filtered = [sq for i, sq in enumerate(squares) if keep[i]]
+        return filtered

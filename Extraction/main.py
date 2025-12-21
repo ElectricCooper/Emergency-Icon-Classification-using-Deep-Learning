@@ -30,20 +30,46 @@ def extract_terminology(filename: str) -> str:
         return ""
 
 
+def save_debug_squares_image(
+    image,
+    squares: list,
+    output_path: Path,
+    filename: str,
+    case: str
+):
+    """
+    Save an image with frames around detected squares.
+
+    """
+    debug_img = image.copy()
+
+    for sq in squares:
+        x, y, w, h = cv2.boundingRect(sq)
+        cv2.rectangle(
+            debug_img,
+            (x, y),
+            (x + w, y + h),
+            (0, 255, 0),
+            thickness=1
+        )
+
+    debug_path = output_path / case
+    debug_path.mkdir(parents=True, exist_ok=True)
+    debug_path = debug_path / f"debug_{filename}"
+    cv2.imwrite(str(debug_path), debug_img)
+
+
 def main():
     """Main"""
     if len(sys.argv) < 2:
-        print(f"Usage: {sys.argv[0]} <source_directory>")
+        print(f"Usage: {sys.argv[0]} <source_directory> [debug]")
         sys.exit(1)
 
     source_path = Path(sys.argv[1])
     extracted_path = source_path.parent / "extracted"
     extracted_path.mkdir(exist_ok=True)
 
-    # Parameters
-    area_min = 50000
-    area_max = 100000
-    tolerance = 25
+    debug = len(sys.argv) >= 3 and sys.argv[2].lower() == "debug"
 
     # Statistics
     total_processed = 0
@@ -72,20 +98,31 @@ def main():
             print("Failed to read image")
             continue
 
-        # Detect all squares
+        # Detect all squares and filter by aspect ratio
         squares = SquareDetector.find_squares(img)
 
-        # Filter squares
-        filtered_squares = SquareDetector.filter_squares(
-            squares, area_min, area_max, tolerance
-        )
+        if debug:
+            print(f"Detected {len(squares)} squares")
+            save_debug_squares_image(
+                img,
+                squares,
+                extracted_path,
+                filename,
+                "detection")
 
-        if not filtered_squares:
-            print("Rejected - no squares after filtering")
-            continue
+        # Remove duplicates
+        squares = SquareDetector.remove_duplicates(squares)
+        if debug:
+            print(f"{len(squares)} squares after removing duplicates")
+            save_debug_squares_image(
+                img,
+                squares,
+                extracted_path,
+                filename,
+                "duplicates")
 
         # Map squares to groups by Y-coordinate
-        grouped_squares = SquareDetector.map_squares(filtered_squares)
+        grouped_squares = SquareDetector.row_map_by_area(squares)
 
         # Assign labels to groups
         labeled_squares = labelling(grouped_squares, terminology)
