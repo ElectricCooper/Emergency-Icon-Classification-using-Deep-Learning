@@ -9,7 +9,7 @@ import numpy as np
 
 def process_square(
     cropped_square: np.ndarray,
-    padding: int = 20
+    padding: int = 10,
 ) -> np.ndarray:
     """
     Detect the drawing within a cropped square, zoom to its bounding box,
@@ -38,26 +38,27 @@ def process_square(
 
     # Bounding box over contours
     points = np.vstack(contours)
-    x, y, w, h = cv2.boundingRect(points)
+    x_rect, y_rect, w, h = cv2.boundingRect(points)
 
     # Expand bounding box with padding
-    x = max(0, x - padding)
-    y = max(0, y - padding)
-    w = min(width - x, w + 2 * padding)
-    h = min(height - y, h + 2 * padding)
+    x_start = max(0, x_rect - padding)
+    y_start = max(0, y_rect - padding)
+    x_end = min(width, x_rect + w + padding)
+    y_end = min(height, y_rect + h + padding)
 
     # Crop and resize binary image
-    icon = binary[y:y + h, x:x + w]
+    icon = binary[y_start:y_end, x_start:x_end]
+
     icon_resized = cv2.resize(
                     icon,
                     (width, height),
                     interpolation=cv2.INTER_NEAREST
                 )
-
-    # Morphological opening to clean noise
-    # might remove depending on behavior with dataset
+    # Morphological dilatation + opening to clean noise
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-    clean_icon = cv2.morphologyEx(icon_resized, cv2.MORPH_OPEN, kernel)
+    thickened = cv2.dilate(icon_resized, kernel, iterations=1)
+    clean_icon = cv2.morphologyEx(thickened, cv2.MORPH_OPEN, kernel)
+
     # if too much is removed, return previous image
     if cv2.countNonZero(clean_icon) < 0.8 * cv2.countNonZero(icon_resized):
         return icon_resized

@@ -145,7 +145,8 @@ def main():
             # Save each square in the group
             for rect in rectangles:
                 x, y, w, h = rect
-                cropped_square = img[y:y+h, x:x+w]
+                # Crop with 10 pixel margin to avoid borders
+                cropped_square = img[y+10:y+h-10, x+10:x+w-10]
                 processed_square = process_square(cropped_square)
 
                 # Generate filename with counter

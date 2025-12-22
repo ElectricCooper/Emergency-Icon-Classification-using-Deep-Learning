@@ -183,7 +183,6 @@ class SquareDetector:
 
                 if is_similar:
                     # Keep the bigger one
-                    # (if icon square is inside, treated in process.py)
                     if area1 > area2:
                         keep[j] = False
                     else:
