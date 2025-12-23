@@ -9,6 +9,8 @@ def train(model, dataloader, criterion, optimizer, device):
     """"Train the model for one epoch."""
     model.train()
     total_loss = 0
+    correct_preds = 0
+    total_preds = 0
 
     for images, labels in dataloader:
         images, labels = images.to(device), labels.to(device)
@@ -22,8 +24,14 @@ def train(model, dataloader, criterion, optimizer, device):
         optimizer.step()
 
         total_loss += loss.item()
+        _, preds = torch.max(outputs, 1)
+        correct_preds += torch.sum(preds == labels.data)
+        total_preds += labels.size(0)
 
-    return total_loss / len(dataloader)
+    epoch_loss = total_loss / len(dataloader)
+    epoch_acc = correct_preds.double() / total_preds
+
+    return epoch_loss, epoch_acc
 
 
 def test(model, dataloader, device, class_names):
