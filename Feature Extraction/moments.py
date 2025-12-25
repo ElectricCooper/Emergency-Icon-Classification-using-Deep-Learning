@@ -36,7 +36,7 @@ class MomentsFeatures:
     @staticmethod
     def average_centroidal_radius(image):
         """Calculate average centroidal radius"""
-        center = MomentsFeatures.gravity_center(image)
+        cx, cy = MomentsFeatures.gravity_center(image)
         contours, _ = cv2.findContours(
                         image,
                         cv2.RETR_EXTERNAL,
@@ -46,17 +46,12 @@ class MomentsFeatures:
         if not contours:
             return 0.0
 
-        total_distance = 0
-        point_count = 0
+        all_points = np.vstack(contours).squeeze()
 
-        for contour in contours:
-            for point in contour:
-                pt = point[0]
-                distance = np.sqrt((pt[0]-center[0])**2 + (pt[1]-center[1])**2)
-                total_distance += distance
-                point_count += 1
+        # Forcing to 2D
+        if all_points.ndim == 1:  # if single point it would be 1D
+            all_points = np.array([all_points])
 
-        if point_count == 0:
-            return 0.0
+        distances = np.sqrt(np.sum((all_points - [cx, cy])**2, axis=1))
 
-        return total_distance / point_count
+        return float(np.mean(distances))
