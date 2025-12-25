@@ -27,10 +27,9 @@ class EllipseDetection:
 
                     # Circularity (making sure it's not a random pt scatter)
                     perimeter = cv2.arcLength(contour, True)
-                    if perimeter == 0:
+                    circularity = 0
+                    if perimeter > 0:
                         circularity = (4*np.pi*area)/(perimeter**2)
-                    else:
-                        circularity = 0
 
                     if ratio > min_ratio and circularity > 0.4:  # Thresholds
                         detected_ellipses.append(ellipse)
