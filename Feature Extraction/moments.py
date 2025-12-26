@@ -1,5 +1,7 @@
 """Module for extracting moment-based features from images"""
 
+import sys
+from pathlib import Path
 import numpy as np
 # pylint: disable=no-member
 import cv2
@@ -55,3 +57,28 @@ class MomentsFeatures:
         distances = np.sqrt(np.sum((all_points - [cx, cy])**2, axis=1))
 
         return float(np.mean(distances))
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print(f"Usage: {sys.argv[0]} <image_path>")
+        sys.exit(1)
+
+    image_path = Path(sys.argv[1])
+    img = cv2.imread(image_path)
+
+    if img is None:
+        print(f"Error: Could not load image at {image_path}")
+    else:
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY)
+
+        moment_calc = MomentsFeatures()
+
+        _hu_moments = moment_calc.get_hu_moments(binary)
+        gravity_center = moment_calc.gravity_center(binary)
+        AVG_CENTROIDAL_RADIUS = moment_calc.average_centroidal_radius(binary)
+
+        print("Hu Moments:", _hu_moments)
+        print("Gravity Center:", gravity_center)
+        print("Average Centroidal Radius:", AVG_CENTROIDAL_RADIUS)
