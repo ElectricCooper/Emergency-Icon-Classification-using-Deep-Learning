@@ -21,6 +21,8 @@ class EllipseDetection:
 
         detected_ellipses = []
         for contour in contours:
+            if len(contour) < 5:
+                continue
             area = cv2.contourArea(contour)
             hull_area = cv2.contourArea(cv2.convexHull(contour))
             solidity = area / hull_area if hull_area > 0 else 0
