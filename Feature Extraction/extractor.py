@@ -109,3 +109,5 @@ if __name__ == "__main__":
 
     folder_path = Path(sys.argv[1])
     IconFeatureExtractor().process_dataset(folder_path)
+    print(f"Feature extraction completed for dataset in {folder_path}")
+    sys.exit(0)
