@@ -1,5 +1,7 @@
 """Module for extracting geometric features from images."""
 
+import sys
+from pathlib import Path
 import numpy as np
 # pylint: disable=no-member
 import cv2
@@ -50,3 +52,31 @@ class GeometricFeatures:
         solidity = area / convex_area if convex_area > 0 else 0
 
         return {"convex_area": convex_area, "solidity": solidity}
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print(f"Usage: {sys.argv[0]} <image_path>")
+        sys.exit(1)
+
+    image_path = Path(sys.argv[1])
+    img = cv2.imread(image_path)
+
+    if img is None:
+        print(f"Error: Could not load image at {image_path}")
+    else:
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY)
+
+        geo = GeometricFeatures()
+
+        _perimeter = geo.calculate_perimeter(binary)
+        _area = geo.compute_area(binary)
+        _compactness = geo.compute_compactness(_perimeter, _area)
+        _convex_data = geo.calculate_convex_area(binary)
+
+        print(f"Perimeter: {_perimeter}")
+        print(f"Area: {_area}")
+        print(f"Compactness: {_compactness}")
+        print(f"Convex Area: {_convex_data['convex_area']}, " +
+              f"Solidity: {_convex_data['solidity']}")
