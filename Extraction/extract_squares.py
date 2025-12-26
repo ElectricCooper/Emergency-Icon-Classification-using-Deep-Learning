@@ -145,7 +145,7 @@ class SquareDetector:
     @staticmethod
     def remove_duplicates(
             squares: List[np.ndarray],
-            tolerance: int = 20
+            tolerance: int = 30
     ) -> List[np.ndarray]:
         """
         Remove overlapping or nearly identical squares.

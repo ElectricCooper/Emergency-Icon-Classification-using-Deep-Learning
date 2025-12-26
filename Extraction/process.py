@@ -9,7 +9,7 @@ import numpy as np
 
 def process_square(
     cropped_square: np.ndarray,
-    padding: int = 10,
+    padding: int = 20,
 ) -> np.ndarray:
     """
     Detect the drawing within a cropped square, zoom to its bounding box,

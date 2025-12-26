@@ -146,8 +146,12 @@ def main():
             for rect in rectangles:
                 x, y, w, h = rect
                 # Crop with 10 pixel margin to avoid borders
-                cropped_square = img[y+10:y+h-10, x+10:x+w-10]
+                cropped_square = img[y+15:y+h-15, x+20:x+w-20]
                 processed_square = process_square(cropped_square)
+
+                if cv2.countNonZero(processed_square) <= 600:
+                    # Skip empty images
+                    continue
 
                 # Generate filename with counter
                 counter = label_counters[label]
