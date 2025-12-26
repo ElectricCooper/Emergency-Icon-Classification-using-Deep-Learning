@@ -12,7 +12,7 @@ class SquareDetector:
     """Class for detecting and processing squares in images."""
 
     THRESH = 10  # For edge detection
-    AREA_THRESHOLD = 2000  # Minimum area to consider
+    AREA_THRESHOLD = 8000  # Minimum area to consider
     EXPECTED_COLS = 5
     EXPECTED_ROWS = 7
     EXPECTED_TOTAL = 35  # Expected number of icon squares
