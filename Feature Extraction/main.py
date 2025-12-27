@@ -1,73 +1,105 @@
-""" Script to load icon features, train ML models (SVM and MLP),
-and evaluate performances"""
+""" Feature extraction pipeline"""
 
 import sys
 from pathlib import Path
 import json
-import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.svm import SVC
-from sklearn.neural_network import MLPClassifier
-from sklearn.metrics import accuracy_score, classification_report
+# pylint: disable=no-member
+import cv2
+
+from geometric_features import GeometricFeatures
+from moments import MomentsFeatures
+from poi import POIDetection
+from lines import LineDetection
+from ellipse import EllipseDetection
+from subdivider import ImageSubdivision
+from diagonal import DiagonalAnalysis
 
 
-class IconMLManager:
-    """Does data loading and model training for icon features"""
+class IconFeatureExtractor:
+    """Consolidated feature extraction pipeline with optimized logic"""
 
-    @staticmethod
-    def features_to_vectors(dataset):
-        """Flatten JSON structure into a matrix X and a label matrix y"""
-        _x = []
-        _y = []
+    def __init__(self, rows=2, cols=3):
+        self.rows = rows
+        self.cols = cols
 
-        for sample in dataset:
-            feature_vector = []
+    def extract_core_features(self, binary):
+        """Helper to extract shared features for both global and sub-zones"""
+        # Lines
+        filtered_lines = LineDetection.detect_lines(binary)
+        line_directions = LineDetection.classify_directions(filtered_lines)
 
-            # process subdivisions
-            for sub in sample['subdivisions']:
-                feature_vector.extend([
-                    sub['perimeter'],
-                    sub['area'],
-                    sub['compactness'],
-                    sub['corners_count'],
-                    sub['sharp_corners_count']
-                ])
-                feature_vector.extend(sub['hu_moments'])
-                feature_vector.extend([
-                    sub['line_directions']['horizontal'],
-                    sub['line_directions']['vertical'],
-                    sub['line_directions']['diag1'],
-                    sub['line_directions']['diag2']
-                ])
+        # POI
+        total_corners, _ = POIDetection.detect_all_corners(binary)
+        sharp_corners, _ = POIDetection.detect_sharp_corners(binary)
 
-            # process global features
-            g = sample['global']
-            feature_vector.extend([
-                g['perimeter'],
-                g['area'],
-                g['compactness'],
-                g['corners_count'],
-                g['sharp_corners_count'],
-                g['ellipse_count'],
-                g['diagonal_length'],
-                g['diagonal_angle'],
-                g['convex_area']['convex_area'],
-                g['convex_area']['solidity'],
-                g['avg_centroidal_radius']
-            ])
-            feature_vector.extend(g['hu_moments'])
-            feature_vector.extend([
-                g['line_directions']['horizontal'],
-                g['line_directions']['vertical'],
-                g['line_directions']['diag1'],
-                g['line_directions']['diag2']
-            ])
+        # Geometry & Moments
+        perimeter = GeometricFeatures.calculate_perimeter(binary)
+        area = GeometricFeatures.compute_area(binary)
+        compactness = GeometricFeatures.compute_compactness(perimeter, area)
+        hu_moments = MomentsFeatures.get_hu_moments(binary)
 
-            _x.append(feature_vector)
-            _y.append(sample['label'])
+        return {
+            'perimeter': perimeter,
+            'area': int(area),
+            'compactness': compactness,
+            'hu_moments': hu_moments,
+            'corners_count': total_corners,
+            'sharp_corners_count': sharp_corners,
+            'line_directions': line_directions
+        }
 
-        return np.array(_x), np.array(_y)
+    def extract_features_from_image(self, image_path):
+        """Extract features from a single image using consolidated logic"""
+        image = cv2.imread(str(image_path))
+        if image is None:
+            return None
+
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY)
+
+        # Subdivision features extraction
+        sub_zones = ImageSubdivision.subdivide(binary, self.rows, self.cols)
+        subdivision_features = []
+        for zone in sub_zones:
+            subdivision_features.append(self.extract_core_features(zone))
+
+        # Global features extraction
+        features = {'subdivisions': subdivision_features}
+        global_f = self.extract_core_features(binary)
+
+        # Adding global features
+        ellipses = EllipseDetection.detect_ellipses(binary)
+        diag = DiagonalAnalysis.analyze_diagonal(binary)
+        convex_area = GeometricFeatures.calculate_convex_area(binary)
+        avg_centr_radius = MomentsFeatures.average_centroidal_radius(binary)
+
+        global_f.update({
+            'ellipse_count': len(ellipses),
+            'diagonal_length': diag['length'],
+            'diagonal_angle': diag['angle'],
+            'convex_area': convex_area,
+            'avg_centroidal_radius': avg_centr_radius
+        })
+
+        features['global'] = global_f
+        return features
+
+    def process_dataset(self, data_dir, output_json='features_dataset.json'):
+        """Walks through folders, extracts features, and save to JSON"""
+        data_dir = Path(data_dir)
+        dataset = []
+
+        for label_folder in filter(Path.is_dir, data_dir.iterdir()):
+            label = label_folder.name
+            for img_file in label_folder.glob('*.png'):
+                feat = self.extract_features_from_image(img_file)
+                if feat:
+                    feat.update({'label': label, 'filename': img_file.name})
+                    dataset.append(feat)
+
+        with open(output_json, 'w', encoding='utf-8') as f:
+            json.dump(dataset, f, indent=2)
+        return 0
 
 
 if __name__ == "__main__":
@@ -75,68 +107,7 @@ if __name__ == "__main__":
         print(f"Usage: {sys.argv[0]} <image_path>")
         sys.exit(1)
 
-    json_path = Path(sys.argv[1])
-
-    try:
-        with open(json_path, 'r', encoding='utf-8') as f:
-            raw_data = json.load(f)
-    except FileNotFoundError:
-        print(f"Error: {json_path} not found. Run the extractor first.")
-        exit(1)
-
-    # flatten features and labels
-    ml_manager = IconMLManager()
-    X, y_raw = ml_manager.features_to_vectors(raw_data)
-
-    le = LabelEncoder()  # Encode labels
-    y = le.fit_transform(y_raw)
-
-    print(f"Dataset: {X.shape[0]} samples, {X.shape[1]} features per sample.")
-
-    # Split data (70% training, 15% val, 15% test)
-    X_train, X_temp, y_train, y_temp = train_test_split(
-        X, y, test_size=0.30, random_state=42, stratify=y
-    )
-
-    X_val, X_test, y_val, y_test = train_test_split(
-        X_temp, y_temp, test_size=0.50, random_state=42, stratify=y_temp
-    )
-
-    print(f"Split: Train={len(X_train)}, Val={len(X_val)}, Test={len(X_test)}")
-
-    # Normalize
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_val_scaled = scaler.transform(X_val)
-    X_test_scaled = scaler.transform(X_test)
-
-    # SVM
-    print("\n--- Training SVM ---")
-    svm_model = SVC(kernel='rbf', C=10.0, gamma='scale', random_state=42)
-    svm_model.fit(X_train_scaled, y_train)
-
-    val_pred_svm = svm_model.predict(X_val_scaled)
-    test_pred_svm = svm_model.predict(X_test_scaled)
-    print(f"SVM Val Accuracy: {accuracy_score(y_val, val_pred_svm):.4f}")
-    print(f"SVM Test Accuracy: {accuracy_score(y_test, test_pred_svm):.4f}")
-
-    # MLP
-    print("\n --- Training MLP ---")
-    mlp_model = MLPClassifier(
-        hidden_layer_sizes=(128, 64),
-        activation='relu',
-        solver='adam',
-        max_iter=1000,
-        early_stopping=True,
-        validation_fraction=0.1,
-        random_state=42
-    )
-    mlp_model.fit(X_train_scaled, y_train)
-
-    test_pred_mlp = mlp_model.predict(X_test_scaled)
-    print(f"MLP Test Accuracy: {accuracy_score(y_test, test_pred_mlp):.4f}")
-
-    # Classification Report
-    print("\n --- MLP Detailed Report ----")
-    print(classification_report(y_test, test_pred_mlp,
-                                target_names=le.classes_))
+    folder_path = Path(sys.argv[1])
+    IconFeatureExtractor().process_dataset(folder_path)
+    print(f"Feature extraction completed for dataset in {folder_path}")
+    sys.exit(0)
