@@ -23,8 +23,8 @@ def create_dataloaders(data_dir, batch_size=32):
     class_names = full_dataset.classes
 
     total_count = len(full_dataset)
-    train_count = int(0.8 * total_count)
-    val_count = int(0.1 * total_count)
+    train_count = int(0.7 * total_count)
+    val_count = int(0.15 * total_count)
     test_count = total_count - train_count - val_count
 
     train_data, val_data, test_data = random_split(

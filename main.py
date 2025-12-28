@@ -136,7 +136,7 @@ def train_ml(json_path_str):
     utils.plot_confusion_matrix(y_test, test_pred_svm, le.classes_, "SVM")
 
     # MLP
-    print("\n --- Training MLP (Sklearn) ---")
+    print("\n --- Training MLP ---")
     mlp_model = MLPClassifier(
         hidden_layer_sizes=(128, 64),
         activation='relu',
@@ -148,6 +148,9 @@ def train_ml(json_path_str):
     )
     mlp_model.fit(X_train_scaled, y_train)
 
+    val_pred_mlp = mlp_model.predict(X_val_scaled)
+    print(f"MLP Val Accuracy: {accuracy_score(y_val, val_pred_mlp):.4f}")
+    
     test_pred_mlp = mlp_model.predict(X_test_scaled)
     print(f"MLP Test Accuracy: {accuracy_score(y_test, test_pred_mlp):.4f}")
 
