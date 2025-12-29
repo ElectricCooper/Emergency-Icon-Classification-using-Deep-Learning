@@ -1,6 +1,5 @@
 """Script to run training and evaluation pipeline for multiple models (DL + ML)."""
 import os
-import sys
 import json
 import torch
 import torch.nn as nn
@@ -18,7 +17,7 @@ from src import data_setup, model_setup, engine, utils
 # Constants
 DATA_PATH = "data/extracted"
 JSON_FEATURES_PATH = "features_dataset.json" # Root directory assumption based on image
-MODELS = ["resnet50", "vit_b_16", "resnet18"]
+MODELS = ["resnet18", "resnet50", "vit_b_16"]
 EPOCHS = 10
 BATCH_SIZE = 32
 LR = 0.0001
