@@ -16,8 +16,9 @@ from src import data_setup, model_setup, engine, utils
 
 # Constants
 DATA_PATH = "data/extracted"
-JSON_FEATURES_PATH = "features_dataset.json" # Root directory assumption based on image
-MODELS = ["resnet18", "resnet50", "vit_b_16"]
+JSON_FEATURES_PATH = "features_dataset.json" 
+
+MODELS = ["simple_cnn", "resnet50", "vit_b_16", "resnet18"]
 EPOCHS = 10
 BATCH_SIZE = 32
 LR = 0.0001
